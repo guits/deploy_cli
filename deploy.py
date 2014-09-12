@@ -6,6 +6,7 @@ import boto
 import boto.s3.connection
 import ConfigParser
 import re
+import subprocess
 
 class s3(object):
     def __init__(self):
@@ -101,6 +102,24 @@ class CLI(cmd.Cmd):
         cmd.Cmd.__init__(self)
         self.prompt = '> '
 
+        config = ConfigParser.ConfigParser()
+        config.read('/root/.deploycli.cfg')
+        self._hosts = {}
+        for key, name in config.items("hosts"):
+            self._hosts[key] = name
+
+    def _exec_command(self, command):
+        process = subprocess.Popen(r'echo %s' % (command),
+                                   stdout=subprocess.PIPE,
+                                   stderr=None, shell=True)
+        output = process.communicate()
+
+        return [line for line in output[0].split("\n") if line != '']
+
+    def _print_exec_output(self, output=None):
+        for k in output:
+            print k
+
     def do_get_bucket(self, arg):
         get_bucket = s3()
         get_bucket.get_bucket()
@@ -130,7 +149,12 @@ class CLI(cmd.Cmd):
         ls_api.ls_api(bucket_name = bucket_name)
 
     def do_deploy_www(self, arg):
-        pass
+        if arg == '':
+            print 'Error, you must specify a tag number'
+        else:
+            print 'Deploying %s package' % (arg)
+            output = self._exec_command("puppi deploy cinemur -o version=%s" % (arg))
+            self._print_exec_output(output=output)
 
     def do_quit(self, arg):
         sys.exit(1)
