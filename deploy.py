@@ -67,10 +67,12 @@ class s3(object):
     def get_tag(self, ls_filtered=None):
         ls_tag = []
         for k in ls_filtered:
-            regexp = '^.*_([0-9]*).*$'
+            regexp = '^.*_([0-9-]*)\.tar\.gz$'
             match = re.match(regexp, k)
             if match:
                 ls_tag.append(match.group(1))
+            else:
+                "There is a problem with a tag which doesn't match, please contact eNovance."
         return ls_tag
 
     def ls_www(self, bucket_name=None):
