@@ -5,6 +5,7 @@ import string, sys
 import boto
 import boto.s3.connection
 import ConfigParser
+import re
 
 class s3(object):
     def __init__(self):
@@ -51,6 +52,7 @@ class s3(object):
 
        return sorted(keys)
 
+
     def ls_filtered(self, bucket_name=None, display=False, pattern=None):
         if bucket_name is None:
             bucket_name = 'livrables'
@@ -58,7 +60,18 @@ class s3(object):
         global_ls = self.ls_bucket(bucket_name = bucket_name, display = False)
         ls_filtered = [k for k in global_ls if k.startswith(pattern)][-10:]
 
-        return ls_filtered
+        ls_filtered_tag = self.get_tag(ls_filtered)
+
+        return ls_filtered_tag
+
+    def get_tag(self, ls_filtered=None):
+        ls_tag = []
+        for k in ls_filtered:
+            regexp = '^.*_([0-9]*).*$'
+            match = re.match(regexp, k)
+            if match:
+                ls_tag.append(match.group(1))
+        return ls_tag
 
     def ls_www(self, bucket_name=None):
 
