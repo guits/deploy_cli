@@ -108,8 +108,9 @@ class CLI(cmd.Cmd):
         for key, name in config.items("hosts"):
             self._hosts[key] = name
 
-    def _exec_command(self, command):
-        process = subprocess.Popen(r'echo %s' % (command),
+    def _exec_command(self, project=None, instance=None, tag=None):
+        
+        process = subprocess.Popen(r'ssh %s "echo puppi deploy %s -o version=%s"' % (self._hosts[instance], project, tag),
                                    stdout=subprocess.PIPE,
                                    stderr=None, shell=True)
         output = process.communicate()
@@ -153,7 +154,31 @@ class CLI(cmd.Cmd):
             print 'Error, you must specify a tag number'
         else:
             print 'Deploying %s package' % (arg)
-            output = self._exec_command("puppi deploy cinemur -o version=%s" % (arg))
+            output = self._exec_command(project='cinemur', instance='www', tag=arg)
+            self._print_exec_output(output=output)
+
+    def do_deploy_workers(self, arg):
+        if arg == '':
+            print 'Error, you must specify a tag number'
+        else:
+            print 'Deploying %s package' % (arg)
+            output = self._exec_command(project='cinemur', instance='workers', tag=arg)
+            self._print_exec_output(output=output)
+
+    def do_deploy_api(self, arg):
+        if arg == '':
+            print 'Error, you must specify a tag number'
+        else:
+            print 'Deploying %s package' % (arg)
+            output = self._exec_command(project='cinemur', instance='api', tag=arg)
+            self._print_exec_output(output=output)
+
+    def do_deploy_admin(self, arg):
+        if arg == '':
+            print 'Error, you must specify a tag number'
+        else:
+            print 'Deploying %s package' % (arg)
+            output = self._exec_command(project='cinemur-admin', instance='www', tag=arg)
             self._print_exec_output(output=output)
 
     def do_quit(self, arg):
