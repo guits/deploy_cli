@@ -77,21 +77,18 @@ class s3(object):
         return ls_tag
 
     def ls_www(self, bucket_name=None):
-
         ls_filtered = self.ls_filtered(bucket_name = bucket_name, pattern='www')
 
         for ls in ls_filtered:
             print ls
 
     def ls_workers(self, bucket_name=None):
-
         ls_filtered = self.ls_filtered(bucket_name = bucket_name, pattern='workers')
 
         for ls in ls_filtered:
             print ls
 
     def ls_api(self, bucket_name=None):
-
         ls_filtered = self.ls_filtered(bucket_name = bucket_name, pattern='restapi')
 
         for ls in ls_filtered:
@@ -109,8 +106,7 @@ class CLI(cmd.Cmd):
             self._hosts[key] = name
 
     def _exec_command(self, project=None, instance=None, tag=None):
-        
-        process = subprocess.Popen(r'ssh %s "echo puppi deploy %s -o version=%s"' % (self._hosts[instance], project, tag),
+        process = subprocess.Popen(r'ssh %s "puppi deploy %s -t -o version=%s"' % (self._hosts[instance], project, tag),
                                    stdout=subprocess.PIPE,
                                    stderr=None, shell=True)
         output = process.communicate()
