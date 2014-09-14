@@ -94,6 +94,12 @@ class s3(object):
         for ls in ls_filtered:
             print ls
 
+    def ls_admin(self, bucket_name=None):
+        ls_filtered = self.ls_filtered(bucket_name = bucket_name, pattern='admin')
+
+        for ls in ls_filtered:
+            print ls
+
 class CLI(cmd.Cmd):
     def __init__(self):
         cmd.Cmd.__init__(self)
@@ -102,11 +108,12 @@ class CLI(cmd.Cmd):
         config = ConfigParser.ConfigParser()
         config.read('/root/.deploycli.cfg')
         self._hosts = {}
+        self._projects = {}
         for key, name in config.items("hosts"):
             self._hosts[key] = name
 
         for key, name in config.items("projects"):
-            self._hosts[key] = name
+            self._projects[key] = name
 
     def _exec_command(self, project=None, instance=None, tag=None):
         process = subprocess.Popen(r'ssh %s "puppi deploy %s -t -o version=%s"' % (self._hosts[instance], project, tag),
@@ -156,21 +163,27 @@ class CLI(cmd.Cmd):
         ls_api = s3()
         ls_api.ls_api(bucket_name = bucket_name)
 
+    def do_ls_admin(self, arg):
+        if arg == '':
+            bucket_name = None
+        ls_admin = s3()
+        ls_admin.ls_admin(bucket_name = bucket_name)
+
     def do_deploy_www(self, arg):
         instance = 'www'
-        self._deploy(arg=arg, project=projects[instance], instance=instance)
+        self._deploy(arg=arg, project=self._projects[instance], instance=instance)
 
     def do_deploy_workers(self, arg):
         instance = 'workers'
-        self._deploy(arg=arg, project=projects[instance], instance=instance)
+        self._deploy(arg=arg, project=self._projects[instance], instance=instance)
 
     def do_deploy_api(self, arg):
         instance = 'api'
-        self._deploy(arg=arg, project=projects[instance], instance=instance)
+        self._deploy(arg=arg, project=self._projects[instance], instance=instance)
 
     def do_deploy_admin(self, arg):
         instance = 'admin'
-        self._deploy(arg=arg, project=projects[instance], instance=instance)
+        self._deploy(arg=arg, project=self._projects[instance], instance=instance)
 
     def do_quit(self, arg):
         sys.exit(1)
@@ -191,9 +204,32 @@ class CLI(cmd.Cmd):
         print "syntax: ls_workers"
         print "List the last 10 workers package"
 
+    def help_ls_api(self):
+        print "syntax: ls_api"
+        print "List the last 10 api package"
+
+    def help_ls_admin(self):
+        print "syntax: ls_admin"
+        print "List the last 10 admin package"
+
     def help_deploy_www(self):
         print "syntax: deploy_www <tag>"
         print "Deploy the www composant with <tag>"
+
+    def help_deploy_admin(self):
+        print "syntax: deploy_admin <tag>"
+        print "Deploy the admin composant with <tag>"
+
+    def help_deploy_api(self):
+        print "syntax: deploy_api <tag>"
+        print "Deploy the api composant with <tag>"
+
+    def help_deploy_workers(self):
+        print "syntax: deploy_workers <tag>"
+        print "Deploy the workers composant with <tag>"
+
+    def help_help(self):
+        print "print this message"
 
     def help_quit(self):
         print "syntax: quit"
