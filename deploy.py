@@ -105,6 +105,9 @@ class CLI(cmd.Cmd):
         for key, name in config.items("hosts"):
             self._hosts[key] = name
 
+        for key, name in config.items("projects"):
+            self._hosts[key] = name
+
     def _exec_command(self, project=None, instance=None, tag=None):
         process = subprocess.Popen(r'ssh %s "puppi deploy %s -t -o version=%s"' % (self._hosts[instance], project, tag),
                                    stdout=subprocess.PIPE,
@@ -114,8 +117,16 @@ class CLI(cmd.Cmd):
         return [line for line in output[0].split("\n") if line != '']
 
     def _print_exec_output(self, output=None):
-        for k in output:
-            print k
+        for line in output:
+            print line
+
+    def _deploy(self, arg, project=None, instance=None):
+        if arg == '':
+            print 'Error, you must specify a tag number'
+        else:
+            print 'Deploying %s package on %s instance' % (arg, instance)
+            output = self._exec_command(project=project, instance=instance, tag=arg)
+            self._print_exec_output(output=output)
 
     def do_get_bucket(self, arg):
         get_bucket = s3()
@@ -146,36 +157,20 @@ class CLI(cmd.Cmd):
         ls_api.ls_api(bucket_name = bucket_name)
 
     def do_deploy_www(self, arg):
-        if arg == '':
-            print 'Error, you must specify a tag number'
-        else:
-            print 'Deploying %s package' % (arg)
-            output = self._exec_command(project='cinemur', instance='www', tag=arg)
-            self._print_exec_output(output=output)
+        instance = 'www'
+        self._deploy(arg=arg, project=projects[instance], instance=instance)
 
     def do_deploy_workers(self, arg):
-        if arg == '':
-            print 'Error, you must specify a tag number'
-        else:
-            print 'Deploying %s package' % (arg)
-            output = self._exec_command(project='cinemur', instance='workers', tag=arg)
-            self._print_exec_output(output=output)
+        instance = 'workers'
+        self._deploy(arg=arg, project=projects[instance], instance=instance)
 
     def do_deploy_api(self, arg):
-        if arg == '':
-            print 'Error, you must specify a tag number'
-        else:
-            print 'Deploying %s package' % (arg)
-            output = self._exec_command(project='cinemur', instance='api', tag=arg)
-            self._print_exec_output(output=output)
+        instance = 'api'
+        self._deploy(arg=arg, project=projects[instance], instance=instance)
 
     def do_deploy_admin(self, arg):
-        if arg == '':
-            print 'Error, you must specify a tag number'
-        else:
-            print 'Deploying %s package' % (arg)
-            output = self._exec_command(project='cinemur-admin', instance='www', tag=arg)
-            self._print_exec_output(output=output)
+        instance = 'admin'
+        self._deploy(arg=arg, project=projects[instance], instance=instance)
 
     def do_quit(self, arg):
         sys.exit(1)
