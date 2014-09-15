@@ -7,6 +7,7 @@ import boto.s3.connection
 import ConfigParser
 import re
 import subprocess
+import logging
 
 class s3(object):
     def __init__(self):
@@ -115,13 +116,18 @@ class CLI(cmd.Cmd):
         for key, name in config.items("projects"):
             self._projects[key] = name
 
-    def _exec_command(self, project=None, instance=None, tag=None):
-        process = subprocess.Popen(r'ssh %s "puppi deploy %s -t -o version=%s"' % (self._hosts[instance], project, tag),
-                                   stdout=subprocess.PIPE,
+    def _exec_command(self, command=None):
+        process = subprocess.Popen(command, stdout=subprocess.PIPE,
                                    stderr=None, shell=True)
         output = process.communicate()
 
         return [line for line in output[0].split("\n") if line != '']
+
+    def _exec_command_puppi(self, project=None, instance=None, tag=None):
+        command = r'ssh %s "puppi deploy %s -t -o version=%s"' % (self._hosts[instance], project, tag)
+        output = self._exec_command(command=command)
+
+        return output
 
     def _print_exec_output(self, output=None):
         for line in output:
@@ -132,7 +138,7 @@ class CLI(cmd.Cmd):
             print 'Error, you must specify a tag number'
         else:
             print 'Deploying %s package on %s instance' % (arg, instance)
-            output = self._exec_command(project=project, instance=instance, tag=arg)
+            output = self._exec_command_puppi(project=project, instance=instance, tag=arg)
             self._print_exec_output(output=output)
 
     def do_get_bucket(self, arg):
