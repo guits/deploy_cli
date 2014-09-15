@@ -8,9 +8,17 @@ import ConfigParser
 import re
 import subprocess
 import logging
+import signal
+
+ROOT_LOG = 'deploy_cli'
+LOG_filename = '/var/log/deploy_cli'
+
+def signal_handler(signal, frame):
+    pass
 
 class s3(object):
     def __init__(self):
+        self._LOG = logging.getLogger("%s.%s" % (ROOT_LOG, self.__class__.__name__))
         config = ConfigParser.ConfigParser()
         config.read('/root/.s3cfg')
         self._access_key = config.get('default', 'access_key')
@@ -103,6 +111,7 @@ class s3(object):
 
 class CLI(cmd.Cmd):
     def __init__(self):
+        self._LOG = logging.getLogger("%s.%s" % (ROOT_LOG, self.__class__.__name__))
         cmd.Cmd.__init__(self)
         self.prompt = '> '
 
@@ -110,6 +119,7 @@ class CLI(cmd.Cmd):
         config.read('/root/.deploycli.cfg')
         self._hosts = {}
         self._projects = {}
+
         for key, name in config.items("hosts"):
             self._hosts[key] = name
 
@@ -117,6 +127,7 @@ class CLI(cmd.Cmd):
             self._projects[key] = name
 
     def _exec_command(self, command=None):
+        self._LOG.info('Exec command: %s' % (command))
         process = subprocess.Popen(command, stdout=subprocess.PIPE,
                                    stderr=None, shell=True)
         output = process.communicate()
@@ -135,9 +146,9 @@ class CLI(cmd.Cmd):
 
     def _deploy(self, arg, project=None, instance=None):
         if arg == '':
-            print 'Error, you must specify a tag number'
+            self._LOG.error('Error, you must specify a tag number')
         else:
-            print 'Deploying %s package on %s instance' % (arg, instance)
+            self._LOG.info('Deploying %s package on %s instance' % (arg, instance))
             output = self._exec_command_puppi(project=project, instance=instance, tag=arg)
             self._print_exec_output(output=output)
 
@@ -192,6 +203,7 @@ class CLI(cmd.Cmd):
         self._deploy(arg=arg, project=self._projects[instance], instance=instance)
 
     def do_quit(self, arg):
+        self._LOG.info('Cli exited')
         sys.exit(1)
 
     def help_get_bucket(self):
@@ -243,5 +255,26 @@ class CLI(cmd.Cmd):
 
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGINT, signal_handler)
+    LOG = logging.getLogger(ROOT_LOG)
+    LOG.setLevel(logging.DEBUG)
+
+    handler_file = logging.FileHandler(filename=LOG_filename)
+    handler_file.setLevel(logging.DEBUG)
+
+    handler_stream = logging.StreamHandler()
+    handler_stream.setLevel(logging.DEBUG)
+
+    formatter_file = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler_file.setFormatter(formatter_file)
+
+    formatter_stream = logging.Formatter('%(message)s')
+    handler_stream.setFormatter(formatter_stream)
+
+    LOG.addHandler(handler_file)
+    LOG.addHandler(handler_stream)
+
+    LOG.info('Cli launched')
+
     cli = CLI()
     cli.cmdloop()
