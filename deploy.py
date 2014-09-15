@@ -73,7 +73,7 @@ class s3(object):
             if match:
                 ls_tag.append(match.group(1))
             else:
-                "There is a problem with a tag which doesn't match, please contact eNovance."
+                print "There is a problem with a tag which doesn't match, please contact eNovance."
         return ls_tag
 
     def ls_www(self, bucket_name=None):
