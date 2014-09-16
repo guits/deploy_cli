@@ -27,6 +27,7 @@ class s3(object):
 
 
     def _connect(self):
+        self._LOG.debug('connecting to s3')
         connection = boto.connect_s3(aws_access_key_id = self._access_key,
                       aws_secret_access_key = self._secret_key,
                       host = self._host,
@@ -82,7 +83,7 @@ class s3(object):
             if match:
                 ls_tag.append(match.group(1))
             else:
-                print "There is a problem with a tag which doesn't match, please contact eNovance."
+                self._LOG.error("There is a problem with a tag which doesn't match: %s, please contact eNovance." % (k))
         return ls_tag
 
     def ls_www(self, bucket_name=None):
@@ -151,6 +152,9 @@ class CLI(cmd.Cmd):
             self._LOG.info('Deploying %s package on %s instance' % (arg, instance))
             output = self._exec_command_puppi(project=project, instance=instance, tag=arg)
             self._print_exec_output(output=output)
+
+    def _dump(self, arg, instance=None):
+        pass
 
     def do_get_bucket(self, arg):
         get_bucket = s3()
