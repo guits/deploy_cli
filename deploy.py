@@ -64,21 +64,21 @@ class s3(object):
        return sorted(keys)
 
 
-    def ls_filtered(self, bucket_name=None, display=False, pattern=None):
+    def _ls_filtered(self, bucket_name=None, display=False, pattern=None):
         if bucket_name is None:
             bucket_name = 'livrables'
 
         global_ls = self.ls_bucket(bucket_name = bucket_name, display = False)
         ls_filtered = [k for k in global_ls if k.startswith(pattern)][-10:]
 
-        ls_filtered_tag = self.get_tag(ls_filtered)
+        ls_filtered_tag = self._get_tag(ls_filtered)
 
         return ls_filtered_tag
 
-    def get_tag(self, ls_filtered=None):
+    def _get_tag(self, ls_filtered=None):
         ls_tag = []
         for k in ls_filtered:
-            regexp = '^.*_([0-9-]*)\.tar\.gz$'
+            regexp = '^.*_([0-9-]*)((\.tar\.gz)|(\.sql))$'
             match = re.match(regexp, k)
             if match:
                 ls_tag.append(match.group(1))
@@ -87,25 +87,31 @@ class s3(object):
         return ls_tag
 
     def ls_www(self, bucket_name=None):
-        ls_filtered = self.ls_filtered(bucket_name = bucket_name, pattern='www')
+        ls_filtered = self._ls_filtered(bucket_name = bucket_name, pattern='www')
 
         for ls in ls_filtered:
             print ls
 
     def ls_workers(self, bucket_name=None):
-        ls_filtered = self.ls_filtered(bucket_name = bucket_name, pattern='workers')
+        ls_filtered = self._ls_filtered(bucket_name = bucket_name, pattern='workers')
 
         for ls in ls_filtered:
             print ls
 
     def ls_api(self, bucket_name=None):
-        ls_filtered = self.ls_filtered(bucket_name = bucket_name, pattern='restapi')
+        ls_filtered = self._ls_filtered(bucket_name = bucket_name, pattern='restapi')
 
         for ls in ls_filtered:
             print ls
 
     def ls_admin(self, bucket_name=None):
-        ls_filtered = self.ls_filtered(bucket_name = bucket_name, pattern='admin')
+        ls_filtered = self._ls_filtered(bucket_name = bucket_name, pattern='admin')
+
+        for ls in ls_filtered:
+            print ls
+
+    def ls_db(self, bucket_name=None):
+        ls_filtered = self._ls_filtered(bucket_name = bucket_name, pattern='db')
 
         for ls in ls_filtered:
             print ls
@@ -141,6 +147,12 @@ class CLI(cmd.Cmd):
 
         return output
 
+    def _exec_command_dump(self, instance=None, dbname=None, dump_path='/var/lib/postgresql/backups'):
+        command = r'echo \'ssh %s "pg_dump -Fc %s > %s/deploy_backup.bin"\'' % (self._hosts[instance], dbname, dump_path)
+        output = self._exec_command(command=command)
+
+        return output
+
     def _print_exec_output(self, output=None):
         for line in output:
             print line
@@ -153,8 +165,12 @@ class CLI(cmd.Cmd):
             output = self._exec_command_puppi(project=project, instance=instance, tag=arg)
             self._print_exec_output(output=output)
 
-    def _dump(self, arg, instance=None):
-        pass
+    def _dump(self, dbname=None, instance=None, dump_path='/var/lib/postgresql/backups'):
+        if instance in self._hosts:
+            self._LOG.info('Dumping %s database (backup)' % (dbname))
+            output = self._exec_command_dump(dbname=dbname, instance=instance, dump_path=dump_path)
+        else:
+            self._LOG.error('Problem with instance name')
 
     def do_get_bucket(self, arg):
         get_bucket = s3()
@@ -190,6 +206,12 @@ class CLI(cmd.Cmd):
         ls_admin = s3()
         ls_admin.ls_admin(bucket_name = bucket_name)
 
+    def do_ls_db(self, arg):
+        if arg == '':
+            bucket_name = None
+        ls_db = s3()
+        ls_db.ls_db(bucket_name = bucket_name)
+
     def do_deploy_www(self, arg):
         instance = 'www'
         self._deploy(arg=arg, project=self._projects[instance], instance=instance)
@@ -205,6 +227,17 @@ class CLI(cmd.Cmd):
     def do_deploy_admin(self, arg):
         instance = 'admin'
         self._deploy(arg=arg, project=self._projects[instance], instance=instance)
+
+    def do_deploy_db(self, arg):
+        args = arg.split()
+        if len(args) != 2:
+            self._LOG.error('Missing argument')
+            self.help_deploy_db()
+        else:
+            dbname = args[0]
+            tag = args[1]
+            self._dump(dbname=args[1], instance='db_slave')
+#TODO: retrieve patch, apply ...
 
     def do_quit(self, arg):
         self._LOG.info('Cli exited')
@@ -245,6 +278,10 @@ class CLI(cmd.Cmd):
     def help_deploy_api(self):
         print "syntax: deploy_api <tag>"
         print "Deploy the api composant with <tag>"
+
+    def help_deploy_db(self):
+        print "syntax: deploy_db <dbname> <tag>"
+        print "Deploy the <tag> patch on <dbname>"
 
     def help_deploy_workers(self):
         print "syntax: deploy_workers <tag>"
