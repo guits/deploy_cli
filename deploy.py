@@ -9,6 +9,7 @@ import re
 import subprocess
 import logging
 import signal
+import datetime
 
 ROOT_LOG = 'deploy_cli'
 LOG_filename = '/var/log/deploy_cli'
@@ -78,7 +79,7 @@ class s3(object):
     def _get_tag(self, ls_filtered=None):
         ls_tag = []
         for k in ls_filtered:
-            regexp = '^.*_([0-9-]*)((\.tar\.gz)|(\.sql))$'
+            regexp = '^.+_([0-9-]+)(\.tar\.gz|\.sql)$'
             match = re.match(regexp, k)
             if match:
                 ls_tag.append(match.group(1))
@@ -119,6 +120,7 @@ class s3(object):
 class CLI(cmd.Cmd):
     def __init__(self):
         self._LOG = logging.getLogger("%s.%s" % (ROOT_LOG, self.__class__.__name__))
+        self._LOG.info('Cli launched')
         cmd.Cmd.__init__(self)
         self.prompt = '> '
 
@@ -134,43 +136,58 @@ class CLI(cmd.Cmd):
             self._projects[key] = name
 
     def _exec_command(self, command=None):
+        result = {}
         self._LOG.info('Exec command: %s' % (command))
         process = subprocess.Popen(command, stdout=subprocess.PIPE,
                                    stderr=None, shell=True)
-        output = process.communicate()
+        result['output'] = process.communicate()
+        result['returncode'] = process.wait()
+        result['pid_child'] = process.pid
 
-        return [line for line in output[0].split("\n") if line != '']
+        return result
+
+#        return [line for line in output[0].split("\n") if line != '']
 
     def _exec_command_puppi(self, project=None, instance=None, tag=None):
         command = r'ssh %s "puppi deploy %s -t -o version=%s"' % (self._hosts[instance], project, tag)
-        output = self._exec_command(command=command)
+        result = self._exec_command(command=command)
 
-        return output
+        return result
 
-    def _exec_command_dump(self, instance=None, dbname=None, dump_path='/var/lib/postgresql/backups'):
-        command = r'echo \'ssh %s "pg_dump -Fc %s > %s/deploy_backup.bin"\'' % (self._hosts[instance], dbname, dump_path)
-        output = self._exec_command(command=command)
+    def _exec_command_dump(self, instance=None, dbname=None, dump_path='/var/lib/postgresql'):
+        if instance in self._hosts:
+            date = datetime.datetime.now().strftime("%d-%m-%Y_%I%M")
+            filename = 'deploy_cli_backup_%s.bin' % (date)
+            self._LOG.info('Dumping database %s for backup, this may take a while...' % (dbname))
+            command = '''ssh -t %s \"su - postgres -c 'pg_dump -Fc %s > %s/%s'\"''' % (self._hosts[instance], dbname, dump_path, filename)
+            try:
+                result = self._exec_command(command=command)
+                output = ('%s' % ('\n'.join([result['output'][0]])))
+                returncode = result['returncode']
+            except IOError as e:
+                print e
+        else:
+            self._LOG.error("Instance name doesn't exist")
 
-        return output
+        result['filename'] = filename
+        return result
 
-    def _print_exec_output(self, output=None):
-        for line in output:
-            print line
+    def _exec_command_upload_s3(self, instance=None, dump_path='/var/lib/postgresql', filename=None):
+        if filename == None or filename == None:
+            self._LOG.error('Error, filename is missing')
+        else:
+           pass 
 
     def _deploy(self, arg, project=None, instance=None):
         if arg == '':
             self._LOG.error('Error, you must specify a tag number')
         else:
             self._LOG.info('Deploying %s package on %s instance' % (arg, instance))
-            output = self._exec_command_puppi(project=project, instance=instance, tag=arg)
-            self._print_exec_output(output=output)
-
-    def _dump(self, dbname=None, instance=None, dump_path='/var/lib/postgresql/backups'):
-        if instance in self._hosts:
-            self._LOG.info('Dumping %s database (backup)' % (dbname))
-            output = self._exec_command_dump(dbname=dbname, instance=instance, dump_path=dump_path)
-        else:
-            self._LOG.error('Problem with instance name')
+            result = self._exec_command_puppi(project=project, instance=instance, tag=arg)
+            output = result['output'][0]
+            returncode = result['returncode']
+            print '\n'.join([output])
+            print 'return code: %s' % (result['returncode'])
 
     def do_get_bucket(self, arg):
         get_bucket = s3()
@@ -236,12 +253,24 @@ class CLI(cmd.Cmd):
         else:
             dbname = args[0]
             tag = args[1]
-            self._dump(dbname=args[1], instance='db_slave')
-#TODO: retrieve patch, apply ...
+            result_dump = self._exec_command_dump(dbname=dbname, instance='db_slave')
+
+            if result_dump['returncode'] == 0:
+                self._LOG.info('database %s dumped successfully' % (dbname))
+                result_upload = self._exec_command_upload_s3(instance='db_slave', filename=result_dump['filename'])
+            elif result_dump['returncode'] == 130:
+                self._LOG.info('database %s dump aborted' % (dbname))
+            else:
+                self._LOG.error('database %s dump error:\n%s' % (dbname, result_dump['output']))
+
+#TODO: retrieve upload dump on s3, rm dump, retrieve patch, apply patch...
 
     def do_quit(self, arg):
         self._LOG.info('Cli exited')
         sys.exit(1)
+
+    def do_exit(self, arg):
+        self.do_quit(arg)
 
     def help_get_bucket(self):
         print "syntax: get_bucket"
@@ -295,8 +324,7 @@ class CLI(cmd.Cmd):
         print "Quit this awesome CLI"
 
 
-if __name__ == '__main__':
-    signal.signal(signal.SIGINT, signal_handler)
+def init_log():
     LOG = logging.getLogger(ROOT_LOG)
     LOG.setLevel(logging.DEBUG)
 
@@ -315,7 +343,13 @@ if __name__ == '__main__':
     LOG.addHandler(handler_file)
     LOG.addHandler(handler_stream)
 
-    LOG.info('Cli launched')
+
+
+if __name__ == '__main__':
+#TODO: l'argument signal_handler il sort d'ou ? pourquoi c'est pas signal_handler (ma fonction tt en haut)
+    signal.signal(signal.SIGINT, signal_handler)
+
+    init_log()
 
     cli = CLI()
     cli.cmdloop()
