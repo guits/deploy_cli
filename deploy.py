@@ -180,6 +180,15 @@ class CLI(cmd.Cmd):
             command = '''ssh -t %s \"s3cmd %s/%s put %s\"''' % (self._hosts[instance], dump_path, filename, bucket_path)
             result = self._exec_command(command=command)
             return result
+            
+    def _exec_command_rm_dump(instance=None, filename=None, dump_path='/var/lib/postgresql'):
+        if filename == None or dump_path == None:
+            self._LOG.error('Missing argument')
+            return 2
+        else:
+            command = '''echo ssh -t %s \"rm %s/%s\"''' % (self._hosts[instance], dump_path, filename)
+            result = self._exec_command(command=command)
+            return result
 
     def _deploy(self, arg, project=None, instance=None):
         if arg == '':
@@ -256,7 +265,8 @@ class CLI(cmd.Cmd):
         else:
             dbname = args[0]
             tag = args[1]
-            result_dump = self._exec_command_dump(dbname=dbname, instance='db_slave')
+            dump_path = '/var/lib/postgresql'
+            result_dump = self._exec_command_dump(dbname=dbname, instance='db_slave', dump_path=dump_path)
 
             if result_dump['returncode'] == 0:
                 filename=result_dump['filename']
@@ -265,14 +275,22 @@ class CLI(cmd.Cmd):
                 result_upload = self._exec_command_upload_s3(instance='db_slave', filename=filename, bucket_path=bucket_path)
                 if result_upload == 0:
                     self._LOG.info('dump %s uploaded on %s successfully' % (filename, bucket_path))
+                    result_rm = self._exec_command_rm_dump(instance='db_slave', filename=filename, dump_path=dump_path)
+                    if result_rm == 0:
+                        self._LOG.info('dump deleted')
+                    else:
+                        self._LOG.error('error trying to rm dump')
                 else:
                     self._LOG.error('Error while uploading dump %s on s3' % (filename))
+                    return 2
             elif result_dump['returncode'] == 130:
                 self._LOG.info('database %s dump aborted' % (dbname))
+                return result_dump['returncode']
             else:
                 self._LOG.error('database %s dump error:\n%s' % (dbname, result_dump['output']))
+                return 2
 
-#TODO: rm dump, retrieve patch, apply patch...
+#TODO: retrieve patch, apply patch...
 
     def do_quit(self, arg):
         self._LOG.info('Cli exited')
