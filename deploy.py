@@ -172,11 +172,14 @@ class CLI(cmd.Cmd):
         result['filename'] = filename
         return result
 
-    def _exec_command_upload_s3(self, instance=None, dump_path='/var/lib/postgresql', filename=None):
-        if filename == None or filename == None:
+    def _exec_command_upload_s3(self, instance=None, dump_path='/var/lib/postgresql', filename=None, bucket_path='s3://enovance-cinemur-mfg-shares/backup_sql/'):
+        if filename == None or filename == '':
             self._LOG.error('Error, filename is missing')
+            return 2
         else:
-           pass 
+            command = '''ssh -t %s \"s3cmd %s/%s put %s\"''' % (self._hosts[instance], dump_path, filename, bucket_path)
+            result = self._exec_command(command=command)
+            return result
 
     def _deploy(self, arg, project=None, instance=None):
         if arg == '':
@@ -256,14 +259,20 @@ class CLI(cmd.Cmd):
             result_dump = self._exec_command_dump(dbname=dbname, instance='db_slave')
 
             if result_dump['returncode'] == 0:
+                filename=result_dump['filename']
+                bucket_path = 's3://enovance-cinemur-mfg-shares/backup_sql/'
                 self._LOG.info('database %s dumped successfully' % (dbname))
-                result_upload = self._exec_command_upload_s3(instance='db_slave', filename=result_dump['filename'])
+                result_upload = self._exec_command_upload_s3(instance='db_slave', filename=filename, bucket_path=bucket_path)
+                if result_upload == 0:
+                    self._LOG.info('dump %s uploaded on %s successfully' % (filename, bucket_path))
+                else:
+                    self._LOG.error('Error while uploading dump %s on s3' % (filename))
             elif result_dump['returncode'] == 130:
                 self._LOG.info('database %s dump aborted' % (dbname))
             else:
                 self._LOG.error('database %s dump error:\n%s' % (dbname, result_dump['output']))
 
-#TODO: retrieve upload dump on s3, rm dump, retrieve patch, apply patch...
+#TODO: rm dump, retrieve patch, apply patch...
 
     def do_quit(self, arg):
         self._LOG.info('Cli exited')
