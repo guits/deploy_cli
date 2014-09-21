@@ -190,6 +190,14 @@ class CLI(cmd.Cmd):
             result = self._exec_command(command=command)
             return result
 
+    def _exec_command_retrieve_patch(self, instance=None, tag=None, bucket='livrables', dst_path='/tmp/'):
+        if tag == None or tag == '':
+            self._LOG.error('Error with db patch tag')
+        else:
+            command = '''ssh -t %s \"s3cmd get s3://%s/%s %s\"''' % (self._hosts[instance], bucket, tag, dst_path)
+            result = self._exec_command(command=command)
+            return result
+
     def _deploy(self, arg, project=None, instance=None):
         if arg == '':
             self._LOG.error('Error, you must specify a tag number')
@@ -278,6 +286,11 @@ class CLI(cmd.Cmd):
                     result_rm = self._exec_command_rm_dump(instance='db_slave', filename=filename, dump_path=dump_path)
                     if result_rm == 0:
                         self._LOG.info('dump deleted')
+                        result_retrieve = self._exec_command_retrieve_patch(instance='db_master', tag=tag, bucket='livrables', dst_path='/tmp/')
+                        if result_retrieve['returncode'] == 0:
+                            self._LOG.info('db patch retrieve ok')
+                        else:
+                            self._LOG.info('Error, unable to get db patch')
                     else:
                         self._LOG.error('error trying to rm dump')
                 else:
