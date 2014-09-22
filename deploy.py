@@ -194,7 +194,7 @@ class CLI(cmd.Cmd):
         if tag == None or tag == '':
             self._LOG.error('Error with db patch tag')
         else:
-            command = '''ssh -t %s \"s3cmd get s3://%s/%s %s\"''' % (self._hosts[instance], bucket, tag, dst_path)
+            command = '''ssh -t %s \"s3cmd get s3://%s/db_%s.sql %s\"''' % (self._hosts[instance], bucket, tag, dst_path)
             result = self._exec_command(command=command)
             return result
 
