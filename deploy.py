@@ -176,38 +176,40 @@ class CLI(cmd.Cmd):
         if filename == None or filename == '':
             self._LOG.error('Error, filename is missing')
             return 2
-        else:
-            command = '''ssh -t %s \"s3cmd %s/%s put %s\"''' % (self._hosts[instance], dump_path, filename, bucket_path)
-            result = self._exec_command(command=command)
-            return result
+
+        command = '''ssh -t %s \"s3cmd %s/%s put %s\"''' % (self._hosts[instance], dump_path, filename, bucket_path)
+        result = self._exec_command(command=command)
+        return result
             
     def _exec_command_rm_dump(instance=None, filename=None, dump_path='/var/lib/postgresql'):
         if filename == None or dump_path == None:
             self._LOG.error('Missing argument')
             return 2
-        else:
-            command = '''echo ssh -t %s \"rm %s/%s\"''' % (self._hosts[instance], dump_path, filename)
-            result = self._exec_command(command=command)
-            return result
+            
+        command = '''echo ssh -t %s \"rm %s/%s\"''' % (self._hosts[instance], dump_path, filename)
+        result = self._exec_command(command=command)
+        return result
 
     def _exec_command_retrieve_patch(self, instance=None, tag=None, bucket='livrables', dst_path='/tmp/'):
         if tag == None or tag == '':
             self._LOG.error('Error with db patch tag')
-        else:
-            command = '''ssh -t %s \"su - postgres 's3cmd get s3://%s/db_%s.sql %s'\"''' % (self._hosts[instance], bucket, tag, dst_path)
-            result = self._exec_command(command=command)
-            return result
+            return 2
+
+        command = '''ssh -t %s \"su - postgres 's3cmd get s3://%s/db_%s.sql %s'\"''' % (self._hosts[instance], bucket, tag, dst_path)
+        result = self._exec_command(command=command)
+        return result
 
     def _deploy(self, arg, project=None, instance=None):
         if arg == '':
             self._LOG.error('Error, you must specify a tag number')
-        else:
-            self._LOG.info('Deploying %s package on %s instance' % (arg, instance))
-            result = self._exec_command_puppi(project=project, instance=instance, tag=arg)
-            output = result['output'][0]
-            returncode = result['returncode']
-            print '\n'.join([output])
-            print 'return code: %s' % (result['returncode'])
+            return 2
+
+        self._LOG.info('Deploying %s package on %s instance' % (arg, instance))
+        result = self._exec_command_puppi(project=project, instance=instance, tag=arg)
+        output = result['output'][0]
+        returncode = result['returncode']
+        print '\n'.join([output])
+        print 'return code: %s' % (result['returncode'])
 
     def do_get_bucket(self, arg):
         get_bucket = s3()
