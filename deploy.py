@@ -265,6 +265,7 @@ class CLI(cmd.Cmd):
         instance = 'admin'
         self._deploy(arg=arg, project=self._projects[instance], instance=instance)
 
+#TODO: apply patch...
     def do_deploy_db(self, arg):
         args = arg.split()
         if len(args) != 2:
@@ -276,34 +277,38 @@ class CLI(cmd.Cmd):
             dump_path = '/var/lib/postgresql'
             result_dump = self._exec_command_dump(dbname=dbname, instance='db_slave', dump_path=dump_path)
 
-            if result_dump['returncode'] == 0:
-                filename=result_dump['filename']
-                bucket_path = 's3://enovance-cinemur-mfg-shares/backup_sql/'
-                self._LOG.info('database %s dumped successfully' % (dbname))
-                result_upload = self._exec_command_upload_s3(instance='db_slave', filename=filename, bucket_path=bucket_path)
-                if result_upload == 0:
-                    self._LOG.info('dump %s uploaded on %s successfully' % (filename, bucket_path))
-                    result_rm = self._exec_command_rm_dump(instance='db_slave', filename=filename, dump_path=dump_path)
-                    if result_rm == 0:
-                        self._LOG.info('dump deleted')
-                        result_retrieve = self._exec_command_retrieve_patch(instance='db_master', tag=tag, bucket='livrables', dst_path='/tmp/')
-                        if result_retrieve['returncode'] == 0:
-                            self._LOG.info('db patch retrieve ok')
-                        else:
-                            self._LOG.info('Error, unable to get db patch')
-                    else:
-                        self._LOG.error('error trying to rm dump')
-                else:
-                    self._LOG.error('Error while uploading dump %s on s3' % (filename))
-                    return 2
-            elif result_dump['returncode'] == 130:
+
+            if result_dump['returncode'] == 130:
                 self._LOG.info('database %s dump aborted' % (dbname))
                 return result_dump['returncode']
-            else:
+            elif not result_dump['returncode'] == 0:
                 self._LOG.error('database %s dump error:\n%s' % (dbname, result_dump['output']))
                 return 2
+            
+            filename=result_dump['filename']
+            bucket_path = 's3://enovance-cinemur-mfg-shares/backup_sql/'
+            self._LOG.info('database %s dumped successfully' % (dbname))
+            result_upload = self._exec_command_upload_s3(instance='db_slave', filename=filename, bucket_path=bucket_path)
+            
+            if not result_upload == 0:
+                self._LOG.error('Error while uploading dump %s on s3' % (filename))
+                return 2
+            
+            self._LOG.info('dump %s uploaded on %s successfully' % (filename, bucket_path))
+            result_rm = self._exec_command_rm_dump(instance='db_slave', filename=filename, dump_path=dump_path)
+            
+            if not result_rm == 0:
+                self._LOG.error('error trying to rm dump')
+                return 2
+            
+            self._LOG.info('dump deleted')
+            result_retrieve = self._exec_command_retrieve_patch(instance='db_master', tag=tag, bucket='livrables', dst_path='/tmp/')
+            
+            if result_retrieve['returncode'] == 0:
+                self._LOG.info('db patch retrieve ok')
+            else:
+                self._LOG.info('Error, unable to get db patch')
 
-#TODO: retrieve patch, apply patch...
 
     def do_quit(self, arg):
         self._LOG.info('Cli exited')
