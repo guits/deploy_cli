@@ -210,6 +210,7 @@ class CLI(cmd.Cmd):
         returncode = result['returncode']
         print '\n'.join([output])
         print 'return code: %s' % (result['returncode'])
+        return returncode
 
     def do_get_bucket(self, arg):
         get_bucket = s3()
