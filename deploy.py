@@ -137,13 +137,12 @@ class CLI(cmd.Cmd):
 
     def _exec_command(self, command=None):
         result = {}
-        self._LOG.info('Exec command: %s' % (command))
+        self._LOG.debug('Exec command: %s' % (command))
         process = subprocess.Popen(command, stdout=subprocess.PIPE,
                                    stderr=None, shell=True)
         result['output'] = process.communicate()
         result['returncode'] = process.wait()
         result['pid_child'] = process.pid
-
         return result
 
 #        return [line for line in output[0].split("\n") if line != '']
@@ -158,7 +157,6 @@ class CLI(cmd.Cmd):
         if instance in self._hosts:
             date = datetime.datetime.now().strftime("%d-%m-%Y_%I%M")
             filename = 'deploy_cli_backup_%s.bin' % (date)
-            self._LOG.info('Dumping database %s for backup, this may take a while...' % (dbname))
             command = '''ssh -t %s \"su - postgres -c 'pg_dump -Fc %s > %s/%s'\"''' % (self._hosts[instance], dbname, dump_path, filename)
             try:
                 result = self._exec_command(command=command)
@@ -177,17 +175,18 @@ class CLI(cmd.Cmd):
             self._LOG.error('Error, filename is missing')
             return 2
 
-        command = '''ssh -t %s \"s3cmd %s/%s put %s\"''' % (self._hosts[instance], dump_path, filename, bucket_path)
+        command = '''ssh -t %s \"s3cmd --no-progress put %s/%s %s\"''' % (self._hosts[instance], dump_path, filename, bucket_path)
         result = self._exec_command(command=command)
         return result
-            
-    def _exec_command_rm_dump(instance=None, filename=None, dump_path='/var/lib/postgresql'):
+
+    def _exec_command_rm_dump(self, instance=None, filename=None, dump_path='/var/lib/postgresql'):
         if filename == None or dump_path == None:
             self._LOG.error('Missing argument')
             return 2
             
-        command = '''echo ssh -t %s \"rm %s/%s\"''' % (self._hosts[instance], dump_path, filename)
+        command = '''ssh -t %s \"rm %s/%s\"''' % (self._hosts[instance], dump_path, filename)
         result = self._exec_command(command=command)
+        output = ('%s' % ('\n'.join([result['output'][0]])))
         return result
 
     def _exec_command_retrieve_patch(self, instance=None, tag=None, bucket='livrables', dst_path='/tmp/'):
@@ -195,7 +194,7 @@ class CLI(cmd.Cmd):
             self._LOG.error('Error with db patch tag')
             return 2
 
-        command = '''ssh -t %s \"su - postgres 's3cmd get s3://%s/db_%s.sql %s'\"''' % (self._hosts[instance], bucket, tag, dst_path)
+        command = '''ssh -t %s \"su - postgres -c 's3cmd get s3://%s/db_%s.sql %s --force'\"''' % (self._hosts[instance], bucket, tag, dst_path)
         result = self._exec_command(command=command)
         return result
 
@@ -279,29 +278,31 @@ class CLI(cmd.Cmd):
         dbname = args[0]
         tag = args[1]
         dump_path = '/var/lib/postgresql'
+        self._LOG.info('Dumping database %s for backup, this may take a while...' % (dbname))
         result_dump = self._exec_command_dump(dbname=dbname, instance='db_slave', dump_path=dump_path)
 
 
         if result_dump['returncode'] == 130:
             self._LOG.info('database %s dump aborted' % (dbname))
-            return result_dump['returncode']
+            return 0
         elif not result_dump['returncode'] == 0:
             self._LOG.error('database %s dump error:\n%s' % (dbname, result_dump['output']))
             return 2
         
+        self._LOG.info('database %s dumped successfully' % (dbname))
         filename=result_dump['filename']
         bucket_path = 's3://enovance-cinemur-mfg-shares/backup_sql/'
-        self._LOG.info('database %s dumped successfully' % (dbname))
+        self._LOG.info('Uploading dump %s on s3 bucket' % (filename))
         result_upload = self._exec_command_upload_s3(instance='db_slave', filename=filename, bucket_path=bucket_path)
         
-        if not result_upload == 0:
+        if not result_upload['returncode'] == 0:
             self._LOG.error('Error while uploading dump %s on s3' % (filename))
             return 2
-        
+       
         self._LOG.info('dump %s uploaded on %s successfully' % (filename, bucket_path))
         result_rm = self._exec_command_rm_dump(instance='db_slave', filename=filename, dump_path=dump_path)
         
-        if not result_rm == 0:
+        if not result_rm['returncode'] == 0:
             self._LOG.error('error trying to rm dump')
             return 2
         
@@ -381,7 +382,7 @@ def init_log():
     handler_file.setLevel(logging.DEBUG)
 
     handler_stream = logging.StreamHandler()
-    handler_stream.setLevel(logging.DEBUG)
+    handler_stream.setLevel(logging.INFO)
 
     formatter_file = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler_file.setFormatter(formatter_file)
