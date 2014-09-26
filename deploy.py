@@ -396,7 +396,6 @@ def init_log():
 
 
 if __name__ == '__main__':
-#TODO: l'argument signal_handler il sort d'ou ? pourquoi c'est pas signal_handler (ma fonction tt en haut)
     signal.signal(signal.SIGINT, signal_handler)
 
     init_log()
